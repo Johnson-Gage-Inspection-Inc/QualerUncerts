@@ -9,6 +9,7 @@ from time import sleep
 from dotenv import load_dotenv
 import json
 from tqdm import tqdm
+import pandas as pd
 
 # Create the directory if it doesn't exist
 output_dir = "csv"
@@ -110,25 +111,23 @@ def main():
     TechniqueIds = [technique["TechniqueId"] for technique in techniques_list]
     ServiceGroupIds = [service["ServiceGroupId"] for service in service_capabilities]
 
+    all_uncertainty_budgets = []
+
     for serviceGroupId in tqdm(ServiceGroupIds, desc="Service Groups"):
         for techniqueId in tqdm(TechniqueIds, desc="Techniques", leave=False):
             if uncertainty_budgets := getUncertaintyBudgets(
                 serviceGroupId, techniqueId
             ):
-                file_name = f"UncertaintyBudgets_{serviceGroupId}_{techniqueId}.csv"
-                save_uncertainty_budgets(uncertainty_budgets, file_name)
+                for row in uncertainty_budgets:
+                    row["ServiceGroupId"] = serviceGroupId
+                    row["TechniqueId"] = techniqueId
+                all_uncertainty_budgets.extend(uncertainty_budgets)
+
+    # Convert to DataFrame and save as a single CSV file
+    df = pd.DataFrame(all_uncertainty_budgets)
+    df.to_csv(os.path.join(output_dir, "AllUncertaintyBudgets.csv"), index=False)
 
     print("Data has been saved to CSV files in the 'QualerUncerts/csv' directory.")
-
-
-def save_uncertainty_budgets(uncertainty_budgets, file_name):
-    output_file = os.path.join(output_dir, file_name)
-
-    with open(output_file, "w", newline="") as csvfile:
-        writer = csv.writer(csvfile)
-        writer.writerow(uncertainty_budgets[0].keys())
-        for row in uncertainty_budgets:
-            writer.writerow(row.values())
 
 
 if __name__ == "__main__":
