@@ -89,33 +89,9 @@ def main():
     for cookie in driver.get_cookies():
         session.cookies.set(cookie["name"], cookie["value"])
 
-    # Fetch and save ServiceCapabilities
-    service_capabilities = getServiceCapabilities()
-    with open(
-        os.path.join(output_dir, "ServiceCapabilities.csv"),
-        "w",
-        newline="",
-        encoding="utf-8",
-    ) as csvfile:
-        writer = csv.writer(csvfile)
-        writer.writerow(service_capabilities[0].keys())
-        for row in service_capabilities:
-            writer.writerow(row.values())
-    ServiceGroupIds = [service["ServiceGroupId"] for service in service_capabilities]
+    ServiceGroupIds = fetch_and_save_service_capabilities()
 
-    # Fetch and save TechniquesList
-    techniques_list = getTechniquesList()
-    with open(
-        os.path.join(output_dir, "TechniquesList.csv"),
-        "w",
-        newline="",
-        encoding="utf-8",
-    ) as csvfile:
-        writer = csv.writer(csvfile)
-        writer.writerow(techniques_list[0].keys())
-        for row in techniques_list:
-            writer.writerow(row.values())
-    TechniqueIds = [technique["TechniqueId"] for technique in techniques_list]
+    TechniqueIds = fetch_and_save_technique_ids()
 
     # Open the CSV file in append mode for streaming writes
     uncertainty_budgets_file = os.path.join(output_dir, "AllUncertaintyBudgets.csv")
@@ -162,6 +138,38 @@ def main():
                 _.result()  # Ensures exceptions are raised if any occur
 
     print("Data has been saved to CSV files in the 'csv' directory.")
+
+
+def fetch_and_save_technique_ids():
+    techniques_list = getTechniquesList()
+    with open(
+        os.path.join(output_dir, "TechniquesList.csv"),
+        "w",
+        newline="",
+        encoding="utf-8",
+    ) as csvfile:
+        writer = csv.writer(csvfile)
+        writer.writerow(techniques_list[0].keys())
+        for row in techniques_list:
+            writer.writerow(row.values())
+    TechniqueIds = [technique["TechniqueId"] for technique in techniques_list]
+    return TechniqueIds
+
+
+def fetch_and_save_service_capabilities():
+    service_capabilities = getServiceCapabilities()
+    with open(
+        os.path.join(output_dir, "ServiceCapabilities.csv"),
+        "w",
+        newline="",
+        encoding="utf-8",
+    ) as csvfile:
+        writer = csv.writer(csvfile)
+        writer.writerow(service_capabilities[0].keys())
+        for row in service_capabilities:
+            writer.writerow(row.values())
+    ServiceGroupIds = [service["ServiceGroupId"] for service in service_capabilities]
+    return ServiceGroupIds
 
 
 if __name__ == "__main__":
