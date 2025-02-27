@@ -10,6 +10,7 @@ from dotenv import load_dotenv
 import json
 from tqdm import tqdm
 import pandas as pd
+from concurrent.futures import ThreadPoolExecutor
 
 # Create the directory if it doesn't exist
 output_dir = "csv"
@@ -111,17 +112,27 @@ def main():
     TechniqueIds = [technique["TechniqueId"] for technique in techniques_list]
     ServiceGroupIds = [service["ServiceGroupId"] for service in service_capabilities]
 
+    def fetch_uncertainty_budgets(serviceGroupId, techniqueId):
+        uncertainty_budgets = getUncertaintyBudgets(serviceGroupId, techniqueId)
+        if uncertainty_budgets:
+            for row in uncertainty_budgets:
+                row["ServiceGroupId"] = serviceGroupId
+                row["TechniqueId"] = techniqueId
+            return uncertainty_budgets
+        return []
+
     all_uncertainty_budgets = []
 
-    for serviceGroupId in tqdm(ServiceGroupIds, desc="Service Groups"):
-        for techniqueId in tqdm(TechniqueIds, desc="Techniques", leave=False):
-            if uncertainty_budgets := getUncertaintyBudgets(
-                serviceGroupId, techniqueId
-            ):
-                for row in uncertainty_budgets:
-                    row["ServiceGroupId"] = serviceGroupId
-                    row["TechniqueId"] = techniqueId
-                all_uncertainty_budgets.extend(uncertainty_budgets)
+    with ThreadPoolExecutor(max_workers=10) as executor:
+        futures = []
+        for serviceGroupId in ServiceGroupIds:
+            for techniqueId in TechniqueIds:
+                futures.append(executor.submit(fetch_uncertainty_budgets, serviceGroupId, techniqueId))
+
+        for future in tqdm(futures, desc="Fetching Uncertainty Budgets"):
+            result = future.result()
+            if result:
+                all_uncertainty_budgets.extend(result)
 
     # Convert to DataFrame and save as a single CSV file
     df = pd.DataFrame(all_uncertainty_budgets)
