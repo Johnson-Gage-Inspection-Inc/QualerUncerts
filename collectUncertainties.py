@@ -9,7 +9,6 @@ from time import sleep
 from dotenv import load_dotenv
 import json
 from tqdm import tqdm
-import pandas as pd
 from concurrent.futures import ThreadPoolExecutor
 
 # Create the directory if it doesn't exist
@@ -102,6 +101,7 @@ def main():
         writer.writerow(service_capabilities[0].keys())
         for row in service_capabilities:
             writer.writerow(row.values())
+    ServiceGroupIds = [service["ServiceGroupId"] for service in service_capabilities]
 
     # Fetch and save TechniquesList
     techniques_list = getTechniquesList()
@@ -116,43 +116,52 @@ def main():
         for row in techniques_list:
             writer.writerow(row.values())
     TechniqueIds = [technique["TechniqueId"] for technique in techniques_list]
-    ServiceGroupIds = [service["ServiceGroupId"] for service in service_capabilities]
 
-    def fetch_uncertainty_budgets(serviceGroupId, techniqueId):
-        uncertainty_budgets = getUncertaintyBudgets(serviceGroupId, techniqueId)
-        if uncertainty_budgets:
-            for row in uncertainty_budgets:
-                row["ServiceGroupId"] = serviceGroupId
-                row["TechniqueId"] = techniqueId
-            return uncertainty_budgets
-        return []
+    # Open the CSV file in append mode for streaming writes
+    uncertainty_budgets_file = os.path.join(output_dir, "AllUncertaintyBudgets.csv")
+    with open(uncertainty_budgets_file, "w", newline="", encoding="utf-8") as csvfile:
+        writer = None  # Will be initialized once the first row arrives
 
-    all_uncertainty_budgets = []
+        def fetch_and_write_uncertainty_budgets(serviceGroupId, techniqueId):
+            nonlocal writer
+            uncertainty_budgets = getUncertaintyBudgets(serviceGroupId, techniqueId)
+            if uncertainty_budgets:
+                for row in uncertainty_budgets:
+                    row["ServiceGroupId"] = serviceGroupId
+                    row["TechniqueId"] = techniqueId
 
-    with ThreadPoolExecutor(max_workers=10) as executor:
-        futures = []
-        for serviceGroupId in ServiceGroupIds:
-            for techniqueId in TechniqueIds:
-                futures.append(
-                    executor.submit(
-                        fetch_uncertainty_budgets, serviceGroupId, techniqueId
+                # Initialize the writer with headers if not already done
+                if writer is None:
+                    writer = csv.DictWriter(
+                        csvfile, fieldnames=uncertainty_budgets[0].keys()
                     )
-                )
+                    writer.writeheader()
 
-        for future in tqdm(futures, desc="Fetching Uncertainty Budgets", dynamic_ncols=True, total=len(futures), unit="budgets"):
-            result = future.result()
-            if result:
-                all_uncertainty_budgets.extend(result)
+                writer.writerows(uncertainty_budgets)
 
-    # Convert to DataFrame and save as a single CSV file
-    df = pd.DataFrame(all_uncertainty_budgets)
-    df.to_csv(
-        os.path.join(output_dir, "AllUncertaintyBudgets.csv"),
-        index=False,
-        encoding="utf-8",
-    )
+        # Use multithreading to speed up data fetching and writing
+        with ThreadPoolExecutor(max_workers=25) as executor:
+            futures = []
+            for serviceGroupId in ServiceGroupIds:
+                for techniqueId in TechniqueIds:
+                    futures.append(
+                        executor.submit(
+                            fetch_and_write_uncertainty_budgets,
+                            serviceGroupId,
+                            techniqueId,
+                        )
+                    )
 
-    print("Data has been saved to CSV files in the 'QualerUncerts/csv' directory.")
+            for _ in tqdm(
+                futures,
+                desc="Fetching & Writing Uncertainty Budgets",
+                dynamic_ncols=True,
+                total=len(futures),
+                unit="budgets",
+            ):
+                _.result()  # Ensures exceptions are raised if any occur
+
+    print("Data has been saved to CSV files in the 'csv' directory.")
 
 
 if __name__ == "__main__":
