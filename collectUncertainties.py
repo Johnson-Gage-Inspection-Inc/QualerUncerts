@@ -26,60 +26,6 @@ driver = webdriver.Chrome(options=chrome_options)
 load_dotenv()
 
 
-def login():
-    driver.get("https://jgiquality.qualer.com/login")
-
-    # Get credentials from environment variables or prompt user
-    username = os.getenv("QUALER_USERNAME") or input("Enter Qualer Email: ")
-    password = os.getenv("QUALER_PASSWORD") or getpass("Enter Qualer Password: ")
-
-    # Input credentials
-    driver.find_element(By.ID, "Email").send_keys(username)
-    driver.find_element(By.ID, "Password").send_keys(password + Keys.RETURN)
-
-    # Allow time for login
-    sleep(5)
-
-    # Check if login was successful
-    if "login" in driver.current_url:
-        print("Login failed. Check credentials.")
-        driver.quit()
-        exit()
-
-
-def driver_get(url):
-    """Loads a URL and re-logins if Qualer prompts for authentication again."""
-    driver.get(url)
-    if "login" in driver.current_url.lower():
-        print("Session expired or reauthentication needed. Logging in again...")
-        login()
-        driver.get(url)
-
-
-def getServiceCapabilities():
-    """Fetch 'ServiceCapabilities' JSON and return as a DataFrame."""
-    url = "https://jgiquality.qualer.com/ServiceType/ServiceCapabilities"
-    driver_get(url)
-    data = driver.find_element(By.TAG_NAME, "pre").text
-    return json.loads(data)["views"]
-
-
-def getTechniquesList():
-    """Fetch 'TechniquesList' JSON and return as a DataFrame."""
-    url = "https://jgiquality.qualer.com/ServiceGroupTechnique/TechniquesList"
-    driver_get(url)
-    data = driver.find_element(By.TAG_NAME, "pre").text
-    return json.loads(data)
-
-
-def getUncertaintyBudgets(serviceGroupId, techniqueId):
-    """Fetch UncertaintyBudgets JSON for a given ServiceGroup + Technique ID."""
-    url = f"https://jgiquality.qualer.com/ServiceGroupTechnique/UncertaintyBudgets?serviceGroupId={serviceGroupId}&techniqueId={techniqueId}"
-    driver_get(url)
-    data = driver.find_element(By.TAG_NAME, "pre").text
-    return json.loads(data)["Data"]
-
-
 def main():
     # Perform login
     login()
@@ -140,7 +86,66 @@ def main():
     print("Data has been saved to CSV files in the 'csv' directory.")
 
 
-def fetch_and_save_technique_ids():
+def login():
+    driver.get("https://jgiquality.qualer.com/login")
+
+    # Get credentials from environment variables or prompt user
+    username = os.getenv("QUALER_USERNAME") or input("Enter Qualer Email: ")
+    password = os.getenv("QUALER_PASSWORD") or getpass("Enter Qualer Password: ")
+
+    # Input credentials
+    driver.find_element(By.ID, "Email").send_keys(username)
+    driver.find_element(By.ID, "Password").send_keys(password + Keys.RETURN)
+
+    # Allow time for login
+    sleep(5)
+
+    # Check if login was successful
+    if "login" in driver.current_url:
+        print("Login failed. Check credentials.")
+        driver.quit()
+        exit()
+
+
+def driver_get(url) -> None:
+    """Loads a URL and re-logins if Qualer prompts for authentication again."""
+    driver.get(url)
+    if "login" in driver.current_url.lower():
+        print("Session expired or reauthentication needed. Logging in again...")
+        login()
+        driver.get(url)
+
+
+def getServiceCapabilities():
+    """Fetch 'ServiceCapabilities' JSON and return as a DataFrame."""
+    url = "https://jgiquality.qualer.com/ServiceType/ServiceCapabilities"
+    driver_get(url)
+    data = driver.find_element(By.TAG_NAME, "pre").text
+    return json.loads(data)["views"]
+
+
+def getTechniquesList():
+    """Fetch 'TechniquesList' JSON and return as a DataFrame."""
+    url = "https://jgiquality.qualer.com/ServiceGroupTechnique/TechniquesList"
+    driver_get(url)
+    data = driver.find_element(By.TAG_NAME, "pre").text
+    return json.loads(data)
+
+
+def getUncertaintyBudgets(serviceGroupId, techniqueId):
+    """Fetch UncertaintyBudgets JSON for a given ServiceGroup + Technique ID."""
+    url = f"https://jgiquality.qualer.com/ServiceGroupTechnique/UncertaintyBudgets?serviceGroupId={serviceGroupId}&techniqueId={techniqueId}"
+    driver_get(url)
+    data = driver.find_element(By.TAG_NAME, "pre").text
+    return json.loads(data)["Data"]
+
+
+def fetch_and_save_technique_ids() -> list:
+    """Fetch and save technique IDs to a CSV file.
+
+    Returns:
+        list: List of Technique IDs
+    """
     techniques_list = getTechniquesList()
     with open(
         os.path.join(output_dir, "TechniquesList.csv"),
@@ -156,7 +161,12 @@ def fetch_and_save_technique_ids():
     return TechniqueIds
 
 
-def fetch_and_save_service_capabilities():
+def fetch_and_save_service_capabilities() -> list:
+    """Fetch and save service capabilities to a CSV file.
+
+    Returns:
+        list: List of ServiceGroup IDs
+    """
     service_capabilities = getServiceCapabilities()
     with open(
         os.path.join(output_dir, "ServiceCapabilities.csv"),
