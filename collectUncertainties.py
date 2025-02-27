@@ -6,9 +6,12 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
 from getpass import getpass
 from time import sleep
+from dotenv import load_dotenv
+import json
+from tqdm import tqdm
 
 # Create the directory if it doesn't exist
-output_dir = 'csv'
+output_dir = "csv"
 os.makedirs(output_dir, exist_ok=True)
 
 # Set up Selenium WebDriver
@@ -18,12 +21,20 @@ chrome_options.add_argument("--log-level=3")
 driver = webdriver.Chrome(options=chrome_options)
 
 
+# Load environment variables from .env file
+load_dotenv()
+
+
 def login():
     driver.get("https://jgiquality.qualer.com/login")
 
+    # Get credentials from environment variables or prompt user
+    username = os.getenv("QUALER_USERNAME") or input("Enter Qualer Email: ")
+    password = os.getenv("QUALER_PASSWORD") or getpass("Enter Qualer Password: ")
+
     # Input credentials
-    driver.find_element(By.ID, "Email").send_keys(input("Enter Qualer Email: "))
-    driver.find_element(By.ID, "Password").send_keys(getpass("Enter Qualer Password: ") + Keys.RETURN)
+    driver.find_element(By.ID, "Email").send_keys(username)
+    driver.find_element(By.ID, "Password").send_keys(password + Keys.RETURN)
 
     # Allow time for login
     sleep(5)
@@ -35,6 +46,39 @@ def login():
         exit()
 
 
+def driver_get(url):
+    """Loads a URL and re-logins if Qualer prompts for authentication again."""
+    driver.get(url)
+    if "login" in driver.current_url.lower():
+        print("Session expired or reauthentication needed. Logging in again...")
+        login()
+        driver.get(url)
+
+
+def getServiceCapabilities():
+    """Fetch 'ServiceCapabilities' JSON and return as a DataFrame."""
+    url = "https://jgiquality.qualer.com/ServiceType/ServiceCapabilities"
+    driver_get(url)
+    data = driver.find_element(By.TAG_NAME, "pre").text
+    return json.loads(data)["views"]
+
+
+def getTechniquesList():
+    """Fetch 'TechniquesList' JSON and return as a DataFrame."""
+    url = "https://jgiquality.qualer.com/ServiceGroupTechnique/TechniquesList"
+    driver_get(url)
+    data = driver.find_element(By.TAG_NAME, "pre").text
+    return json.loads(data)
+
+
+def getUncertaintyBudgets(serviceGroupId, techniqueId):
+    """Fetch UncertaintyBudgets JSON for a given ServiceGroup + Technique ID."""
+    url = f"https://jgiquality.qualer.com/ServiceGroupTechnique/UncertaintyBudgets?serviceGroupId={serviceGroupId}&techniqueId={techniqueId}"
+    driver_get(url)
+    data = driver.find_element(By.TAG_NAME, "pre").text
+    return json.loads(data)["Data"]
+
+
 def main():
     # Perform login
     login()
@@ -42,65 +86,49 @@ def main():
     # Extract cookies for requests session
     session = requests.Session()
     for cookie in driver.get_cookies():
-        session.cookies.set(cookie['name'], cookie['value'])
+        session.cookies.set(cookie["name"], cookie["value"])
 
-    driver.quit()
+    # Fetch and save ServiceCapabilities
+    service_capabilities = getServiceCapabilities()
+    with open(
+        os.path.join(output_dir, "ServiceCapabilities.csv"), "w", newline=""
+    ) as csvfile:
+        writer = csv.writer(csvfile)
+        writer.writerow(service_capabilities[0].keys())
+        for row in service_capabilities:
+            writer.writerow(row.values())
 
-    # Define headers
-    headers = {
-        "accept": "application/json",
-        "x-requested-with": "XMLHttpRequest",
-    }
+    # Fetch and save TechniquesList
+    techniques_list = getTechniquesList()
+    with open(
+        os.path.join(output_dir, "TechniquesList.csv"), "w", newline=""
+    ) as csvfile:
+        writer = csv.writer(csvfile)
+        writer.writerow(techniques_list[0].keys())
+        for row in techniques_list:
+            writer.writerow(row.values())
+    TechniqueIds = [technique["TechniqueId"] for technique in techniques_list]
+    ServiceGroupIds = [service["ServiceGroupId"] for service in service_capabilities]
 
-    # Define the URLs
-    urls = [
-        "https://jgiquality.qualer.com/ServiceType/ServiceCapabilities",
-        "https://jgiquality.qualer.com/ServiceGroupTechnique/TechniquesList"
-    ]
-
-    # Fetch data from each URL and save to CSV
-    for url in urls:
-        response = session.get(url, headers=headers)
-        if response.status_code == 401:
-            print(f"Unauthorized request: {url}. Check authentication.")
-            continue
-
-        data = response.json()
-        file_name = url.split('/')[-1] + '.csv'
-        output_file = os.path.join(output_dir, file_name)
-
-        with open(output_file, 'w', newline='') as csvfile:
-            writer = csv.writer(csvfile)
-            writer.writerow(data[0].keys())
-            for row in data:
-                writer.writerow(row.values())
-
-    # Define the combinations of serviceGroupId and techniqueId
-    combinations = [
-        (14319, 855),
-        # Add more combinations as needed
-    ]
-
-    # Fetch data for each combination and save to CSV
-    for serviceGroupId, techniqueId in combinations:
-        url = f"https://jgiquality.qualer.com/ServiceGroupTechnique/UncertaintyBudgets?serviceGroupId={serviceGroupId}&techniqueId={techniqueId}"
-        response = session.get(url, headers=headers)
-
-        if response.status_code == 401:
-            print(f"Unauthorized request: {url}. Check authentication.")
-            continue
-
-        data = response.json()
-        file_name = f"UncertaintyBudgets_{serviceGroupId}_{techniqueId}.csv"
-        output_file = os.path.join(output_dir, file_name)
-
-        with open(output_file, 'w', newline='') as csvfile:
-            writer = csv.writer(csvfile)
-            writer.writerow(data[0].keys())
-            for row in data:
-                writer.writerow(row.values())
+    for serviceGroupId in tqdm(ServiceGroupIds, desc="Service Groups"):
+        for techniqueId in tqdm(TechniqueIds, desc="Techniques", leave=False):
+            if uncertainty_budgets := getUncertaintyBudgets(
+                serviceGroupId, techniqueId
+            ):
+                file_name = f"UncertaintyBudgets_{serviceGroupId}_{techniqueId}.csv"
+                save_uncertainty_budgets(uncertainty_budgets, file_name)
 
     print("Data has been saved to CSV files in the 'QualerUncerts/csv' directory.")
+
+
+def save_uncertainty_budgets(uncertainty_budgets, file_name):
+    output_file = os.path.join(output_dir, file_name)
+
+    with open(output_file, "w", newline="") as csvfile:
+        writer = csv.writer(csvfile)
+        writer.writerow(uncertainty_budgets[0].keys())
+        for row in uncertainty_budgets:
+            writer.writerow(row.values())
 
 
 if __name__ == "__main__":
