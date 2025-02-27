@@ -93,7 +93,10 @@ def main():
     # Fetch and save ServiceCapabilities
     service_capabilities = getServiceCapabilities()
     with open(
-        os.path.join(output_dir, "ServiceCapabilities.csv"), "w", newline="", encoding="utf-8"
+        os.path.join(output_dir, "ServiceCapabilities.csv"),
+        "w",
+        newline="",
+        encoding="utf-8",
     ) as csvfile:
         writer = csv.writer(csvfile)
         writer.writerow(service_capabilities[0].keys())
@@ -103,7 +106,10 @@ def main():
     # Fetch and save TechniquesList
     techniques_list = getTechniquesList()
     with open(
-        os.path.join(output_dir, "TechniquesList.csv"), "w", newline="", encoding="utf-8"
+        os.path.join(output_dir, "TechniquesList.csv"),
+        "w",
+        newline="",
+        encoding="utf-8",
     ) as csvfile:
         writer = csv.writer(csvfile)
         writer.writerow(techniques_list[0].keys())
@@ -127,7 +133,11 @@ def main():
         futures = []
         for serviceGroupId in ServiceGroupIds:
             for techniqueId in TechniqueIds:
-                futures.append(executor.submit(fetch_uncertainty_budgets, serviceGroupId, techniqueId))
+                futures.append(
+                    executor.submit(
+                        fetch_uncertainty_budgets, serviceGroupId, techniqueId
+                    )
+                )
 
         for future in tqdm(futures, desc="Fetching Uncertainty Budgets"):
             result = future.result()
@@ -136,7 +146,11 @@ def main():
 
     # Convert to DataFrame and save as a single CSV file
     df = pd.DataFrame(all_uncertainty_budgets)
-    df.to_csv(os.path.join(output_dir, "AllUncertaintyBudgets.csv"), index=False, encoding="utf-8")
+    df.to_csv(
+        os.path.join(output_dir, "AllUncertaintyBudgets.csv"),
+        index=False,
+        encoding="utf-8",
+    )
 
     print("Data has been saved to CSV files in the 'QualerUncerts/csv' directory.")
 
