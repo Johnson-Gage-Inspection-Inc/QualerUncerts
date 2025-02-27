@@ -139,7 +139,7 @@ def main():
                     )
                 )
 
-        for future in tqdm(futures, desc="Fetching Uncertainty Budgets"):
+        for future in tqdm(futures, desc="Fetching Uncertainty Budgets", dynamic_ncols=True, total=len(futures), unit="budgets"):
             result = future.result()
             if result:
                 all_uncertainty_budgets.extend(result)
