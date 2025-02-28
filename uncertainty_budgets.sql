@@ -67,3 +67,6 @@ ON CONFLICT DO NOTHING;
 
 -- Step 12: Drop the temporary table
 DROP TABLE temp_uncertainty_budgets;
+
+ALTER TABLE IF EXISTS public.service_capabilities
+    ADD FOREIGN KEY ("RootCategoryId") REFERENCES public.categories (categoryid);
