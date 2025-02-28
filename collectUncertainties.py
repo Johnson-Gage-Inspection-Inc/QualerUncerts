@@ -11,6 +11,7 @@ from tqdm import tqdm
 from concurrent.futures import ThreadPoolExecutor
 from sqlalchemy import create_engine
 import pandas as pd
+from selenium.common.exceptions import StaleElementReferenceException
 
 # Load environment variables from .env file
 load_dotenv()
@@ -95,19 +96,26 @@ def getTechniquesList():
     return json.loads(data)
 
 
-def getUncertaintyBudgets(serviceGroupId, techniqueId):
-    """Fetch UncertaintyBudgets JSON for a given ServiceGroup + Technique ID."""
+def getUncertaintyBudgets(serviceGroupId, techniqueId, retries=3):
+    """Fetch UncertaintyBudgets JSON with retry for stale element issues."""
     url = f"https://jgiquality.qualer.com/ServiceGroupTechnique/UncertaintyBudgets?serviceGroupId={serviceGroupId}&techniqueId={techniqueId}"
-    driver_get(url)
-    data = driver.find_element(By.TAG_NAME, "pre").text
-    return json.loads(data)["Data"]
+
+    for attempt in range(retries):
+        try:
+            driver_get(url)
+            data = driver.find_element(By.TAG_NAME, "pre").text
+            return json.loads(data)["Data"]
+        except StaleElementReferenceException:
+            if attempt < retries - 1:
+                print(f"Stale element encountered. Retrying ({attempt + 1}/{retries})...")
+                sleep(2)  # Small delay before retrying
+            else:
+                raise  # Raise the error if all retries fail
 
 
 def fetch_and_insert_uncertainty_budgets(serviceGroupId, techniqueId):
     """Fetch uncertainty budgets and insert directly into the database in small chunks."""
-    uncertainty_budgets = getUncertaintyBudgets(serviceGroupId, techniqueId)
-
-    if uncertainty_budgets:
+    if uncertainty_budgets := getUncertaintyBudgets(serviceGroupId, techniqueId):
         for row in uncertainty_budgets:
             row["ServiceGroupId"] = serviceGroupId
             row["TechniqueId"] = techniqueId
@@ -119,6 +127,7 @@ def fetch_and_insert_uncertainty_budgets(serviceGroupId, techniqueId):
                 df.iloc[chunk: chunk + 500].to_sql(
                     "uncertainty_budgets", conn, if_exists="append", index=False
                 )
+        del df
 
 
 def fetch_and_save_technique_ids():
