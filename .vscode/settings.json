@@ -3,5 +3,17 @@
         "tests"
     ],
     "python.testing.unittestEnabled": false,
-    "python.testing.pytestEnabled": true
+    "python.testing.pytestEnabled": true,
+    "sqltools.connections": [
+        {
+            "previewLimit": 50,
+            "server": "192.168.1.177",
+            "port": 5432,
+            "driver": "PostgreSQL",
+            "username": "postgres",
+            "password": "postgres",
+            "database": "qualer",
+            "name": "qualer"
+        }
+    ]
 }
