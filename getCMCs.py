@@ -8,8 +8,8 @@ from getpass import getpass
 from time import sleep
 from dotenv import load_dotenv
 from tqdm import tqdm
-from concurrent.futures import ThreadPoolExecutor
 from sqlalchemy import create_engine
+from sqlalchemy.engine.base import Connection
 import pandas as pd
 from selenium.common.exceptions import StaleElementReferenceException
 
@@ -40,21 +40,8 @@ def main():
 
     TechniqueIds = fetch_and_save_technique_ids()
 
-    # Use multithreading to speed up data fetching and writing
-    with ThreadPoolExecutor(max_workers=10) as executor:
-        futures = []
-        for techniqueId in TechniqueIds:
-            futures.append(
-                executor.submit(
-                    fetch_and_insert_capablilites,
-                    techniqueId,
-                )
-            )
-
-        for _ in show_progress(
-            futures, desc="Service Groups", unit="service group"
-        ):
-            _.result()  # Ensures exceptions are raised if any occur
+    for techniqueId in tqdm(TechniqueIds, desc="Techniques", unit="technique"):
+        fetch_and_insert_capablilites(techniqueId)
 
     print("Data has been inserted into the database.")
 
@@ -110,6 +97,18 @@ def getCapabilities(techniqueId, retries=3):
                 raise  # Raise the error if all retries fail
 
 
+def table_exists(table_name, conn: Connection):
+    """Check if a table exists in the database."""
+    query = f"""
+    SELECT EXISTS (
+        SELECT FROM information_schema.tables
+        WHERE table_name = '{table_name}'
+    );
+    """
+    result = conn.execute(query)
+    return result.scalar()
+
+
 def fetch_and_insert_capablilites(techniqueId):
     """Fetch uncertainty budgets and insert directly into the database in small chunks."""
     if capabilities := getCapabilities(techniqueId):
@@ -117,12 +116,10 @@ def fetch_and_insert_capablilites(techniqueId):
             row["TechniqueId"] = techniqueId
 
         df = pd.DataFrame(capabilities)
-
-        with engine.connect() as conn:
-            for chunk in range(0, len(df), 500):  # Insert in batches of 500
-                df.iloc[chunk: chunk + 500].to_sql(
-                    "capabilities", conn, if_exists="append", index=False
-                )
+        for chunk in range(0, len(df), 500):  # Insert in batches of 500
+            df.iloc[chunk: chunk + 500].to_sql(
+                "capabilities", engine, if_exists="append", index=False
+            )
         del df
 
 
