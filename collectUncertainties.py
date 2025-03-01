@@ -47,10 +47,16 @@ def main():
             futures = []
             for serviceGroupId in ServiceGroupIds:
                 futures.append(
-                    executor.submit(fetch_and_insert_uncertainty_budgets, serviceGroupId, techniqueId)
+                    executor.submit(
+                        fetch_and_insert_uncertainty_budgets,
+                        serviceGroupId,
+                        techniqueId,
+                    )
                 )
 
-            for _ in show_progress(futures, desc="Service Groups", unit="service group"):
+            for _ in show_progress(
+                futures, desc="Service Groups", unit="service group"
+            ):
                 _.result()  # Ensures exceptions are raised if any occur
 
     print("Data has been inserted into the database.")
@@ -107,7 +113,9 @@ def getUncertaintyBudgets(serviceGroupId, techniqueId, retries=3):
             return json.loads(data)["Data"]
         except StaleElementReferenceException:
             if attempt < retries - 1:
-                print(f"Stale element encountered. Retrying ({attempt + 1}/{retries})...")
+                print(
+                    f"Stale element encountered. Retrying ({attempt + 1}/{retries})..."
+                )
                 sleep(2)  # Small delay before retrying
             else:
                 raise  # Raise the error if all retries fail
@@ -124,7 +132,7 @@ def fetch_and_insert_uncertainty_budgets(serviceGroupId, techniqueId):
 
         with engine.connect() as conn:
             for chunk in range(0, len(df), 500):  # Insert in batches of 500
-                df.iloc[chunk: chunk + 500].to_sql(
+                df.iloc[chunk : chunk + 500].to_sql(
                     "uncertainty_budgets", conn, if_exists="append", index=False
                 )
         del df
