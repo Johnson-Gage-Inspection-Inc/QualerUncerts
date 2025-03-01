@@ -15,6 +15,7 @@ from tqdm import tqdm
 # Create the directory if it doesn't exist
 output_dir = "csv"
 os.makedirs(output_dir, exist_ok=True)
+output_file = os.path.join(output_dir, "CompleteUncertaintyBudgets.csv")
 
 # Load environment variables from .env file
 load_dotenv()
@@ -97,7 +98,10 @@ def main():
 
     # Fetch Uncertainty Budget IDs
     UncertaintyBudgetIds = query_uncertainty_budgets()
-    all_uncertainty_budgets = []
+
+    # Ensure the CSV file starts fresh
+    if os.path.exists(output_file):
+        os.remove(output_file)
 
     for uncertaintyBudgetId in tqdm(
         UncertaintyBudgetIds, desc="Fetching Uncertainty Budgets"
@@ -105,11 +109,15 @@ def main():
         uncertainty_budgets = getUncertaintyBudgets(uncertaintyBudgetId)
         for row in uncertainty_budgets:
             row["UncertaintyBudgetId"] = uncertaintyBudgetId
-        all_uncertainty_budgets.extend(uncertainty_budgets)
 
-    # Convert to DataFrame and save as a CSV file
-    df = pd.DataFrame(all_uncertainty_budgets)
-    df.to_csv(os.path.join(output_dir, "CompleteUncertaintyBudgets.csv"), index=False)
+        if uncertainty_budgets:
+            df = pd.DataFrame(uncertainty_budgets)
+            df.to_csv(
+                output_file,
+                mode="a",
+                header=not os.path.exists(output_file),
+                index=False,
+            )
 
     print("Data has been saved to CSV files in the 'csv' directory.")
 
