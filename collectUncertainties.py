@@ -132,7 +132,7 @@ def fetch_and_insert_uncertainty_budgets(serviceGroupId, techniqueId):
 
         with engine.connect() as conn:
             for chunk in range(0, len(df), 500):  # Insert in batches of 500
-                df.iloc[chunk : chunk + 500].to_sql(
+                df.iloc[chunk: chunk + 500].to_sql(
                     "uncertainty_budgets", conn, if_exists="append", index=False
                 )
         del df
