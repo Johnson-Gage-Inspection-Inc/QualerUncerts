@@ -15,7 +15,8 @@ from tqdm import tqdm
 # Create the directory if it doesn't exist
 output_dir = "csv"
 os.makedirs(output_dir, exist_ok=True)
-output_file = os.path.join(output_dir, "CompleteUncertaintyBudgets.csv")
+components_output_file = os.path.join(output_dir, "UncertaintyComponents.csv")
+values_output_file = os.path.join(output_dir, "UncertaintyValues.csv")
 
 # Load environment variables from .env file
 load_dotenv()
@@ -60,7 +61,7 @@ def driver_get(url):
         driver.get(url)
 
 
-def getUncertaintyBudgets(uncertaintyBudgetId, retries=3):
+def getUncertaintyComponents(uncertaintyBudgetId, retries=3):
     """Fetch UncertaintyBudgets JSON with retry for stale element issues."""
     url = f"https://jgiquality.qualer.com/UncertaintyComponent/List?UncertaintyBudgetId={uncertaintyBudgetId}"
 
@@ -100,23 +101,39 @@ def main():
     UncertaintyBudgetIds = query_uncertainty_budgets()
 
     # Ensure the CSV file starts fresh
-    if os.path.exists(output_file):
-        os.remove(output_file)
+    if os.path.exists(components_output_file):
+        os.remove(components_output_file)
+
+    if os.path.exists(values_output_file):
+        os.remove(values_output_file)
 
     for uncertaintyBudgetId in tqdm(
         UncertaintyBudgetIds, desc="Fetching Uncertainty Budgets"
     ):
-        uncertainty_budgets = getUncertaintyBudgets(uncertaintyBudgetId)
-        for row in uncertainty_budgets:
-            row["UncertaintyBudgetId"] = uncertaintyBudgetId
+        uncertaintyComponents = getUncertaintyComponents(uncertaintyBudgetId)
+        for component in uncertaintyComponents:
+            UncertaintyValues = component.pop("UncertaintyValues")
+            component["UncertaintyBudgetId"] = uncertaintyBudgetId
+            for UncertaintyValue in UncertaintyValues:
+                UncertaintyValue["UncertaintyComponentId"] = component["Id"]
+                if UncertaintyValues:
+                    df = pd.DataFrame(UncertaintyValues)
+                    df.to_csv(
+                        values_output_file,
+                        mode="a",
+                        header=not os.path.exists(components_output_file),
+                        index=False,
+                        encoding="utf-8",
+                    )
 
-        if uncertainty_budgets:
-            df = pd.DataFrame(uncertainty_budgets)
+        if uncertaintyComponents:
+            df = pd.DataFrame(uncertaintyComponents)
             df.to_csv(
-                output_file,
+                components_output_file,
                 mode="a",
-                header=not os.path.exists(output_file),
+                header=not os.path.exists(components_output_file),
                 index=False,
+                encoding="utf-8",
             )
 
     print("Data has been saved to CSV files in the 'csv' directory.")
