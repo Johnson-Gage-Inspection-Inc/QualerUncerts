@@ -4,6 +4,7 @@ import json
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
+from selenium.common.exceptions import StaleElementReferenceException
 from sqlalchemy import create_engine
 from getpass import getpass
 from time import sleep
@@ -58,17 +59,30 @@ def driver_get(url):
         driver.get(url)
 
 
-def getUncertaintyBudgets(uncertaintyBudgetId):
-    """Fetch UncertaintyBudgets JSON for a given Uncertainty Budget ID."""
+def getUncertaintyBudgets(uncertaintyBudgetId, retries=3):
+    """Fetch UncertaintyBudgets JSON with retry for stale element issues."""
     url = f"https://jgiquality.qualer.com/UncertaintyComponent/List?UncertaintyBudgetId={uncertaintyBudgetId}"
-    driver_get(url)
-    data = driver.find_element(By.TAG_NAME, "pre").text
-    return json.loads(data).get("uncertaintyComponents", [])
+
+    for attempt in range(retries):
+        try:
+            driver_get(url)
+            data = driver.find_element(By.TAG_NAME, "pre").text
+            return json.loads(data).get("uncertaintyComponents", [])
+        except StaleElementReferenceException:
+            if attempt < retries - 1:
+                print(
+                    f"Stale element encountered. Retrying ({attempt + 1}/{retries})..."
+                )
+                sleep(2)  # Small delay before retrying
+            else:
+                raise  # Raise the error if all retries fail
 
 
 def query_uncertainty_budgets():
     """Fetch Uncertainty Budget IDs from the database."""
-    data = pd.read_sql('SELECT "UncertaintyBudgetId" FROM public.uncertainty_budgets', engine)
+    data = pd.read_sql(
+        'SELECT "UncertaintyBudgetId" FROM public.uncertainty_budgets', engine
+    )
     return data["UncertaintyBudgetId"].tolist()
 
 
